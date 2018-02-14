@@ -1,3 +1,4 @@
+import debounce = require('lodash.debounce');
 import * as PropTypes from 'prop-types';
 import * as React from 'react';
 import {
@@ -11,12 +12,11 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { Geometry, Placement, Rect, Size, computeGeometry } from './PopoverGeometry';
-import debounce = require('lodash.debounce');
+import { computeGeometry, Geometry, Placement, Rect, Size } from './PopoverGeometry';
 
-const styles = StyleSheet.create({
+const styles: any = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject as any,
+    ...StyleSheet.absoluteFillObject,
     opacity: 0,
     backgroundColor: 'transparent',
   },
@@ -24,7 +24,7 @@ const styles = StyleSheet.create({
     opacity: 1,
   },
   background: {
-    ...StyleSheet.absoluteFillObject as any,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.5)',
   },
   popover: {
@@ -56,43 +56,39 @@ const styles = StyleSheet.create({
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
-const ARROW_ROTATION: { [index: string]: number } = {
-  bottom: 2,
-  left: -1,
-  right: 1,
-  top: 0.0,
-  auto: 0.0,
+const ARROW_DEG: { [index in Placement]: string } = {
+  bottom: '-180deg',
+  left: '-90deg',
+  right: '90deg',
+  top: '0deg',
 };
 
 export interface PopoverProps {
   visible?: boolean;
   onClose?: () => void;
   arrowSize: Size;
-  placement: Placement;
+  placement: Placement | 'auto';
   fromRect: Rect;
   displayArea: Rect;
   backgroundStyle?: ViewStyle;
   arrowStyle: ViewStyle;
   popoverStyle?: ViewStyle;
   contentStyle: ViewStyle;
+  duration?: number;
+  easing?: (show: boolean) => (value: number) => number;
 }
 
 export interface PopoverState extends Geometry {
   contentSize: Size;
   visible: boolean;
   isAwaitingShow: boolean;
-  animations: {
-    scale: Animated.Value;
-    translate: Animated.ValueXY;
-    fade: Animated.Value;
-    rotate: Animated.Value;
-  };
+  animation: Animated.Value;
 }
 
 type LayoutCallback =
   (event: { nativeEvent: { layout: { x: number, y: number, width: number, height: number } } }) => void;
 
-export default class Popover extends React.Component<PopoverProps, PopoverState> {
+export default class Popover extends React.PureComponent<PopoverProps, PopoverState> {
 
   static propTypes: any = {
     visible: PropTypes.bool,
@@ -118,6 +114,8 @@ export default class Popover extends React.Component<PopoverProps, PopoverState>
     arrowStyle: PropTypes.any,
     popoverStyle: PropTypes.any,
     contentStyle: PropTypes.any,
+    duration: PropTypes.number,
+    easing: PropTypes.func,
   };
 
   static defaultProps: Partial<PopoverProps> = {
@@ -126,6 +124,8 @@ export default class Popover extends React.Component<PopoverProps, PopoverState>
     displayArea: { x: 10, y: 10, width: SCREEN_WIDTH - 20, height: SCREEN_HEIGHT - 20 },
     arrowSize: { width: 16, height: 8 },
     placement: 'auto',
+    duration: 300,
+    easing: (show) => show ? Easing.out(Easing.back(1.70158)) : Easing.inOut(Easing.quad),
   };
 
   static displayName = 'Popover';
@@ -136,15 +136,10 @@ export default class Popover extends React.Component<PopoverProps, PopoverState>
       contentSize: { width: 0, height: 0 },
       anchor: { x: 0, y: 0 },
       origin: { x: 0, y: 0 },
-      placement: props.placement || 'auto',
+      placement: props.placement  === 'auto' ? 'top' : props.placement,
       visible: false,
       isAwaitingShow: false,
-      animations: {
-        scale: new Animated.Value(0),
-        translate: new Animated.ValueXY({ x: 0, y: 0 }),
-        fade: new Animated.Value(0),
-        rotate: new Animated.Value(0),
-      },
+      animation: new Animated.Value(0),
     };
   }
 
@@ -169,13 +164,13 @@ export default class Popover extends React.Component<PopoverProps, PopoverState>
         }
       });
     }
-  }
+  };
 
   private getTranslateOrigin = () => {
     const { contentSize, origin, anchor } = this.state;
     const popoverCenter = { x: origin.x + contentSize.width / 2, y: origin.y + contentSize.height / 2 };
     return { x: anchor.x - popoverCenter.x, y: anchor.y - popoverCenter.y };
-  }
+  };
 
   componentWillReceiveProps(nextProps: PopoverProps) {
     const willBeVisible = nextProps.visible;
@@ -208,46 +203,20 @@ export default class Popover extends React.Component<PopoverProps, PopoverState>
   }
 
   private startAnimation = (show: boolean) => {
-    const values = this.state.animations;
-    const translateOrigin = this.getTranslateOrigin();
-
-    if (show) {
-      values.translate.setValue(translateOrigin);
-      values.rotate.setValue(ARROW_ROTATION[this.state.placement]);
-    }
-
-    const commonConfig = {
-      duration: 300,
-      easing: show ? Easing.out(Easing.back(1.70158)) : Easing.inOut(Easing.quad),
+    const doneCallback = show ? undefined : this.onHidden;
+    Animated.timing(this.state.animation, {
+      toValue: show ? 1 : 0,
+      duration: this.props.duration,
+      easing: this.props.easing!(show),
       useNativeDriver: true,
-    };
+    }).start(doneCallback);
+  };
 
-    const doneCallback = show ? undefined : () => this.setState({ visible: false });
-
-    Animated.parallel([
-      // Workaround - fake animated value
-      Animated.timing(values.rotate, {
-        toValue: ARROW_ROTATION[this.state.placement],
-        duration: 0,
-        useNativeDriver: true,
-      }),
-      Animated.timing(values.fade, {
-        toValue: show ? 1 : 0,
-        ...commonConfig,
-      }),
-      Animated.timing(values.translate, {
-        toValue: show ? { x: 0, y: 0 } : translateOrigin,
-        ...commonConfig,
-      }),
-      Animated.timing(values.scale, {
-        toValue: show ? 1 : 0,
-        ...commonConfig,
-      }),
-    ]).start(doneCallback);
-  }
+  private onHidden = () => this.setState({ visible: false, isAwaitingShow: false });
 
   private computeStyles = () => {
-    const { animations, anchor, origin } = this.state;
+    const { animation, anchor, origin } = this.state;
+    const translateOrigin = this.getTranslateOrigin();
     const arrowSize = this.props.arrowSize;
 
     // Create the arrow from a rectangle with the appropriate borderXWidth set
@@ -262,7 +231,7 @@ export default class Popover extends React.Component<PopoverProps, PopoverState>
         styles.background,
         this.props.backgroundStyle,
         {
-          opacity: animations.fade.interpolate({
+          opacity: animation.interpolate({
             inputRange: [0, 1],
             outputRange: [0, 1],
             extrapolate: 'clamp',
@@ -282,17 +251,16 @@ export default class Popover extends React.Component<PopoverProps, PopoverState>
           borderBottomWidth: height / 2,
           borderLeftWidth: width / 2,
           transform: [
-            // This is workaround for https://github.com/facebook/react-native/issues/14161
-            // Instead of setting rotate to fixed value, I have to keep it as animated
             {
-              rotate: animations.rotate.interpolate({
-                inputRange: [-2, 2],
-                outputRange: ['-180deg', '180deg'],
+              // Animation is workaround for https://github.com/facebook/react-native/issues/14161
+              rotate: animation.interpolate({
+                inputRange: [0, 1],
+                outputRange: [ARROW_DEG[this.state.placement], ARROW_DEG[this.state.placement]],
                 extrapolate: 'clamp',
               }),
             },
             {
-              scale: animations.scale.interpolate({
+              scale: animation.interpolate({
                 inputRange: [0, 1],
                 outputRange: [0, 1],
                 extrapolate: 'clamp',
@@ -311,14 +279,24 @@ export default class Popover extends React.Component<PopoverProps, PopoverState>
         this.props.contentStyle,
         {
           transform: [
-            { translateX: animations.translate.x },
-            { translateY: animations.translate.y },
-            { scale: animations.scale },
+            { translateX: animation.interpolate({
+                inputRange: [0, 1],
+                outputRange: [translateOrigin.x, 0],
+                extrapolate: 'clamp',
+              }),
+            },
+            { translateY: animation.interpolate({
+                inputRange: [0, 1],
+                outputRange: [translateOrigin.y, 0],
+                extrapolate: 'clamp',
+              }),
+            },
+            { scale: animation },
           ],
         },
       ],
     };
-  }
+  };
 
   render() {
     const { origin } = this.state;
