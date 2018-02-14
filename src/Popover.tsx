@@ -303,7 +303,12 @@ export default class Popover extends React.PureComponent<PopoverProps, PopoverSt
     const computedStyles = this.computeStyles();
     const contentSizeAvailable = this.state.contentSize.width;
     return (
-      <Modal transparent visible={this.state.visible} onRequestClose={this.props.onClose}>
+      <Modal
+        {...this.props}
+        transparent
+        visible={this.state.visible}
+        onRequestClose={this.props.onClose}
+        >
         <View style={[styles.container, contentSizeAvailable && styles.containerVisible]}>
 
           <TouchableWithoutFeedback onPress={this.props.onClose}>

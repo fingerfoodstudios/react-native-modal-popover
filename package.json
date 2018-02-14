@@ -1,11 +1,11 @@
 {
-  "name": "react-native-modal-popover",
-  "version": "0.0.5",
+  "name": "react-native-modal-popover-props",
+  "version": "0.0.6",
   "description": "Pure JS popover component for react-native",
   "main": "lib/index.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/doomsower/react-native-modal-popover.git"
+    "url": "git+https://github.com/fingerfoodstudios/react-native-modal-popover.git"
   },
   "keywords": [
     "react",
@@ -13,12 +13,11 @@
     "popover",
     "modal"
   ],
-  "author": "Konstantin Kuznetsov",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/doomsower/react-native-modal-popover/issues"
+    "url": "https://github.com/fingerfoodstudios/react-native-modal-popover/issues"
   },
-  "homepage": "https://github.com/doomsower/react-native-modal-popover#readme",
+  "homepage": "https://github.com/fingerfoodstudios/react-native-modal-popover#readme",
   "scripts": {
     "compile": "rm -rf ./build/* && tsc",
     "prepublish": "yarn run compile"
